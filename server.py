@@ -3,11 +3,13 @@ import subprocess
 import os
 import base64
 import tempfile
-import time
-from flask_cors import CORS  # Add this import
+from flask_cors import CORS
 
 app = Flask(__name__, static_folder='.')
 CORS(app)  # Enable CORS for all routes
+
+# Ensure processed directory exists
+os.makedirs('processed', exist_ok=True)
 
 @app.route('/')
 def index():
@@ -63,8 +65,29 @@ def process_image():
         if not output_path:
             return jsonify({'error': 'Output file not found'}), 500
         
-        # Return the path to the processed image
-        return jsonify({'success': True, 'outputPath': output_path})
+        print(f"Found processed image at: {output_path}")
+        
+        # Check if file is readable
+        if not os.access(output_path, os.R_OK):
+            return jsonify({'error': 'Cannot read output file (permission denied)'}), 500
+        
+        # Get file size for verification
+        file_size = os.path.getsize(output_path)
+        print(f"Output file size: {file_size} bytes")
+        
+        if file_size == 0:
+            return jsonify({'error': 'Output file is empty'}), 500
+        
+        # Return the path and also base64 data for direct display
+        with open(output_path, 'rb') as img_file:
+            img_data = base64.b64encode(img_file.read()).decode('utf-8')
+        
+        # Return both path and data
+        return jsonify({
+            'success': True, 
+            'outputPath': output_path,
+            'imageData': f"data:image/jpeg;base64,{img_data}"
+        })
     
     except Exception as e:
         # Ensure temp file cleanup even on errors
@@ -72,5 +95,12 @@ def process_image():
             os.remove(image_path)
         return jsonify({'error': str(e)}), 500
 
+# Add a specific endpoint for downloading the file
+@app.route('/download/<path:filename>')
+def download_file(filename):
+    # Security: Ensure the filename is sanitized
+    filename = os.path.basename(filename)
+    return send_from_directory('.', filename, as_attachment=True)
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    app.run(debug=True, port=5000)

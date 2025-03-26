@@ -6,17 +6,19 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file with verbose output to debug issues
+print("Loading environment variables...")
+load_dotenv(verbose=True)
 
-# Get input from stdin to allow server to pass the image path
-user_infile = input().strip()
+# Restore user-friendly prompt
+user_infile = input("Enter the path of the image file: ")
 
 def save_binary_file(file_name, data):
     with open(file_name, "wb") as f:
         f.write(data)
 
 def generate(api_key):
+    print(f"Using API key: {api_key[:5]}...")  # Print first few chars to confirm loading
     # Initialize client with API key
     client = genai.Client(api_key=api_key)
     
@@ -72,5 +74,8 @@ if __name__ == "__main__":
     # Get API key from environment variable
     api_key = os.getenv("MY_GENAI_KEY")
     if not api_key:
-        raise ValueError("API key not found. Please set it in the .env file.")
+        # Check current directory for debugging
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Env vars available: {list(os.environ.keys())}")
+        raise ValueError("API key not found. Please set MY_GENAI_KEY in the .env file.")
     generate(api_key)
