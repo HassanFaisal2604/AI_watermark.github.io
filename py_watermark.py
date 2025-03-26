@@ -3,6 +3,8 @@ import os
 import mimetypes
 import sys
 import tempfile
+import time
+import random
 from PIL import Image
 from google import genai
 from google.genai import types
@@ -85,64 +87,133 @@ def generate(api_key):
         
         model = "gemini-2.0-flash-exp-image-generation"
         
-        print("Setting up model request...")
-        contents = [
-            types.Content(
-                role="user",
-                parts=[
-                    types.Part.from_uri(
-                        file_uri=files[0].uri or "",
-                        mime_type=files[0].mime_type or "",
-                    ),
-                    types.Part.from_text(text="Remove watermark"),
-                ],
-            ),
+        # Define multiple prompts to try in sequence
+        prompts = [
+            "Remove the watermark from this image completely. Reconstruct the underlying image perfectly.",
+            
+            "Using advanced image reconstruction, eliminate all watermarks, texts and logos from this image. Maintain the original image's quality, details and colors.",
+            
+            "Erase the watermark or text overlay from this image. Fill in the removed areas with content that matches the surrounding pixels perfectly.",
+            
+            "Clean this image by removing all watermarks, texts, logos or overlays. Keep everything else exactly as in the original.",
+            
+            "Please precisely identify and remove all watermarks, brand logos, and text overlays from this image. Reconstruct the areas underneath with pixel-perfect accuracy. Do not alter any other part of the image."
         ]
         
-        # Using the original config approach that works with your version
-        generate_content_config = types.GenerateContentConfig(
-            response_modalities=["image", "text"],
-            response_mime_type="text/plain",
-        )
-
-        print(f"Sending request to model {model}...")
+        # Try each prompt in sequence until success
         success = False
+        response = None
         
-        for chunk in client.models.generate_content_stream(
-            model=model,
-            contents=contents,
-            config=generate_content_config,
-        ):
-            if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
-                print("Received empty chunk, continuing...")
-                continue
+        for attempt, prompt in enumerate(prompts, 1):
+            if attempt > 1:
+                print(f"Retrying with different prompt (attempt {attempt}/{len(prompts)})...")
+                # Add a small delay between attempts
+                time.sleep(2)
             
-            part = chunk.candidates[0].content.parts[0]
-            if hasattr(part, "inline_data") and part.inline_data:
-                file_name = "watermark_removed"
-                inline_data = part.inline_data
-                print(f"Received inline data with mime type: {inline_data.mime_type}")
+            print(f"Trying prompt: '{prompt}'")
+            
+            # Using the original config approach that works with your version
+            generate_content_config = types.GenerateContentConfig(
+                response_modalities=["image", "text"],
+                response_mime_type="text/plain",
+            )
+            
+            contents = [
+                types.Content(
+                    role="user",
+                    parts=[
+                        types.Part.from_uri(
+                            file_uri=files[0].uri or "",
+                            mime_type=files[0].mime_type or "",
+                        ),
+                        types.Part.from_text(text=prompt),
+                    ],
+                ),
+            ]
+            
+            print(f"Sending request to model {model}...")
+            
+            try:
+                # Try with streaming first
+                chunks_received = 0
+                for chunk in client.models.generate_content_stream(
+                    model=model,
+                    contents=contents,
+                    config=generate_content_config,
+                ):
+                    chunks_received += 1
+                    if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
+                        print("Received empty chunk, continuing...")
+                        continue
+                    
+                    part = chunk.candidates[0].content.parts[0]
+                    if hasattr(part, "inline_data") and part.inline_data:
+                        file_name = "watermark_removed"
+                        inline_data = part.inline_data
+                        print(f"Received inline data with mime type: {inline_data.mime_type}")
+                        
+                        file_extension = mimetypes.guess_extension(inline_data.mime_type)
+                        if not file_extension:
+                            file_extension = ".jpg"  # Default
+                        
+                        output_path = f"{file_name}{file_extension}"
+                        print(f"Saving output to: {output_path}")
+                        
+                        if save_binary_file(output_path, inline_data.data):
+                            success = True
+                            print(f"File saved successfully to: {output_path}")
+                            break  # Exit the chunk loop
+                        else:
+                            print("Failed to save the processed image")
+                    elif hasattr(part, "text") and part.text:
+                        print(f"Text response: {part.text}")
+                    else:
+                        print(f"Unknown response type: {type(part)}")
                 
-                file_extension = mimetypes.guess_extension(inline_data.mime_type)
-                if not file_extension:
-                    file_extension = ".jpg"  # Default
+                print(f"Received {chunks_received} chunks in total")
                 
-                output_path = f"{file_name}{file_extension}"
-                print(f"Saving output to: {output_path}")
+                if success:
+                    break  # Exit the prompt loop if successful
                 
-                if save_binary_file(output_path, inline_data.data):
-                    success = True
-                    print(f"File saved successfully to: {output_path}")
-                else:
-                    print("Failed to save the processed image")
-            elif hasattr(part, "text") and part.text:
-                print(f"Text response: {part.text}")
-            else:
-                print(f"Unknown response type: {type(part)}")
+                # If streaming didn't work, try non-streaming as a fallback
+                if not success and chunks_received == 0:
+                    print("Streaming response empty, trying non-streaming API...")
+                    response = client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        generation_config=generate_content_config,
+                    )
+                    
+                    if response.candidates and response.candidates[0].content:
+                        for part in response.candidates[0].content.parts:
+                            if hasattr(part, "inline_data") and part.inline_data:
+                                file_name = "watermark_removed"
+                                inline_data = part.inline_data
+                                print(f"Received inline data with mime type: {inline_data.mime_type}")
+                                
+                                file_extension = mimetypes.guess_extension(inline_data.mime_type)
+                                if not file_extension:
+                                    file_extension = ".jpg"  # Default
+                                
+                                output_path = f"{file_name}{file_extension}"
+                                print(f"Saving output to: {output_path}")
+                                
+                                if save_binary_file(output_path, inline_data.data):
+                                    success = True
+                                    print(f"File saved successfully to: {output_path}")
+                                    break  # Exit the part loop
+                    
+                    if success:
+                        break  # Exit the prompt loop if successful
+            
+            except Exception as attempt_error:
+                print(f"Error during attempt {attempt}: {str(attempt_error)}")
+                print(traceback.format_exc())
+                continue  # Try the next prompt
         
         if not success:
             print("Warning: No image data was received from the API")
-            raise Exception("No image data received from the Gemini API")
+            raise Exception("No image data received from the Gemini API after multiple attempts")
         
         return success
             
