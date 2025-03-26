@@ -1,0 +1,74 @@
+import base64
+import os
+import mimetypes
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+user_infile = input("Enter the path of the image file: ")
+
+def save_binary_file(file_name, data):
+    with open(file_name, "wb") as f:
+        f.write(data)
+
+def generate(api_key):
+    # Initialize client with API key
+    client = genai.Client(api_key=api_key)
+    
+    # Upload local image file - use Windows path format
+    files = [
+        client.files.upload(file=user_infile),
+    ]
+    
+    model = "gemini-2.0-flash-exp-image-generation"
+    
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_uri(
+                    file_uri=files[0].uri,
+                    mime_type=files[0].mime_type,
+                ),
+                types.Part.from_text(text="Remove watermark"),
+            ],
+        ),
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text="INSERT_INPUT_HERE"),
+            ],
+        ),
+    ]
+    
+    generate_content_config = types.GenerateContentConfig(
+        response_modalities=["image", "text"],
+        response_mime_type="text/plain",
+    )
+
+    for chunk in client.models.generate_content_stream(
+        model=model,
+        contents=contents,
+        config=generate_content_config,
+    ):
+        if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
+            continue
+        
+        if hasattr(chunk.candidates[0].content.parts[0], "inline_data") and chunk.candidates[0].content.parts[0].inline_data:
+            file_name = "watermark_removed"
+            inline_data = chunk.candidates[0].content.parts[0].inline_data
+            file_extension = mimetypes.guess_extension(inline_data.mime_type)
+            save_binary_file(f"{file_name}{file_extension}", inline_data.data)
+            print(f"File of mime type {inline_data.mime_type} saved to: {file_name}{file_extension}")
+        else:
+            print(chunk.candidates[0].content.parts[0].text)
+
+if __name__ == "__main__":
+    # Get API key from environment variable
+    api_key = os.getenv("MY_GENAI_KEY")
+    if not api_key:
+        raise ValueError("API key not found. Please set it in the .env file.")
+    generate(api_key)
