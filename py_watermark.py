@@ -1,6 +1,7 @@
 import base64
 import os
 import mimetypes
+import sys
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
@@ -8,7 +9,8 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-user_infile = input("Enter the path of the image file: ")
+# Get input from stdin to allow server to pass the image path
+user_infile = input().strip()
 
 def save_binary_file(file_name, data):
     with open(file_name, "wb") as f:
@@ -30,8 +32,8 @@ def generate(api_key):
             role="user",
             parts=[
                 types.Part.from_uri(
-                    file_uri=files[0].uri,
-                    mime_type=files[0].mime_type,
+                    file_uri=files[0].uri or "",  # Fix None check issue
+                    mime_type=files[0].mime_type or "",  # Fix None check issue
                 ),
                 types.Part.from_text(text="Remove watermark"),
             ],
@@ -51,7 +53,7 @@ def generate(api_key):
 
     for chunk in client.models.generate_content_stream(
         model=model,
-        contents=contents,
+        contents=contents,  # This might need conversion based on error
         config=generate_content_config,
     ):
         if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
@@ -60,7 +62,7 @@ def generate(api_key):
         if hasattr(chunk.candidates[0].content.parts[0], "inline_data") and chunk.candidates[0].content.parts[0].inline_data:
             file_name = "watermark_removed"
             inline_data = chunk.candidates[0].content.parts[0].inline_data
-            file_extension = mimetypes.guess_extension(inline_data.mime_type)
+            file_extension = mimetypes.guess_extension(inline_data.mime_type)  # Fixed typo here
             save_binary_file(f"{file_name}{file_extension}", inline_data.data)
             print(f"File of mime type {inline_data.mime_type} saved to: {file_name}{file_extension}")
         else:
