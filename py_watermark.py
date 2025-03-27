@@ -233,11 +233,11 @@ def generate(api_key):
 if __name__ == "__main__":
     try:
         # Get API key from environment variable
-        api_key = os.getenv("MY_GENAI_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             print(f"Current working directory: {os.getcwd()}")
             print(f"Env vars available: {list(os.environ.keys())}")
-            raise ValueError("API key not found. Please set MY_GENAI_KEY in the .env file.")
+            raise ValueError("API key not found. Please set GEMINI_API_KEY in the .env file.")
         
         success = generate(api_key)
         
