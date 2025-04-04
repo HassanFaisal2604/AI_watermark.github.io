@@ -101,89 +101,26 @@ def process_image():
             print(f"Script stderr: {stderr}")
         
         if process.returncode != 0:
-            return jsonify({
-                'error': f'Python script error (code {process.returncode})', 
-                'stdout': stdout,
-                'stderr': stderr
-            }), 500
+            return jsonify({'error': 'Error processing image'}), 500
         
-        # Check if the watermark_removed file was created
-        output_path = None
-        for ext in ['.jpg', '.jpeg', '.png', '.webp', '.gif']:
-            if os.path.exists(f"watermark_removed{ext}"):
-                output_path = f"watermark_removed{ext}"
-                break
+        output_path = stdout.strip()
+        print(f"Watermark removed, output saved to: {output_path}")
         
-        if not output_path:
-            return jsonify({
-                'error': 'Output file not found after processing',
-                'stdout': stdout,
-                'stderr': stderr,
-                'files_in_dir': os.listdir('.')
-            }), 500
-        
-        print(f"Found processed image at: {output_path}")
-        
-        # Check if file is readable
-        if not os.access(output_path, os.R_OK):
-            return jsonify({'error': 'Cannot read output file (permission denied)'}), 500
-        
-        # Get file size for verification
-        file_size = os.path.getsize(output_path)
-        print(f"Output file size: {file_size} bytes")
-        
-        if file_size == 0:
-            return jsonify({'error': 'Output file is empty'}), 500
-        
-        # Determine correct mime type based on file extension
-        mime_type = 'image/jpeg'  # Default
-        if output_path.endswith('.png'):
-            mime_type = 'image/png'
-        elif output_path.endswith('.webp'):
-            mime_type = 'image/webp'
-        elif output_path.endswith('.gif'):
-            mime_type = 'image/gif'
-        
-        # Return the path and also base64 data for direct display
-        with open(output_path, 'rb') as img_file:
-            img_data = base64.b64encode(img_file.read()).decode('utf-8')
-        
-        # Return both path and data with correct mime type
-        return jsonify({
-            'success': True, 
-            'outputPath': output_path,
-            'imageData': f"data:{mime_type};base64,{img_data}"
-        })
+        # Return the processed image path as response
+        with open(output_path, 'rb') as output_image:
+            base64_output = base64.b64encode(output_image.read()).decode('utf-8')
+            return jsonify({'success': True, 'imageData': f"data:image/{ext[1:]};base64,{base64_output}"})
     
     except Exception as e:
-        error_traceback = traceback.format_exc()
-        print(f"Error: {str(e)}\n{error_traceback}")
-        return jsonify({'error': str(e), 'traceback': error_traceback}), 500
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
     
     finally:
-        # Clean up temporary files
-        try:
-            if image_path and os.path.exists(image_path):
-                os.remove(image_path)
-                print(f"Removed temporary input file: {image_path}")
-            
-            # Remove temporary directory if it exists
-            if 'temp_dir' in locals() and os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                print(f"Removed temporary directory: {temp_dir}")
-        except Exception as cleanup_error:
-            print(f"Error during cleanup: {str(cleanup_error)}")
-
-# Add a specific endpoint for downloading the file
-@app.route('/download/<path:filename>')
-def download_file(filename):
-    # Security: Ensure the filename is sanitized
-    filename = os.path.basename(filename)
-    if not os.path.exists(filename):
-        return jsonify({'error': f'File not found: {filename}'}), 404
-    return send_from_directory('.', filename, as_attachment=True)
+        # Clean up temporary files and directories
+        if image_path and os.path.exists(image_path):
+            os.remove(image_path)
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5000))
-    print(f"Starting Flask server on port {port}...")
-    app.run(host="0.0.0.0", port=port)
+    app.run(port=5000)
