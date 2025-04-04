@@ -192,5 +192,11 @@ def download_file(filename):
     return send_from_directory('.', filename, as_attachment=True)
 
 if __name__ == '__main__':
-    print(f"Starting Flask server on port 5000...")
-    app.run(debug=True, port=5000)
+    # Get port from environment variable (for Railway deployment)
+    port = int(os.environ.get('PORT', 5000))
+    
+    # In production, disable debug mode
+    debug_mode = os.environ.get('FLASK_ENV') == 'development'
+    
+    print(f"Starting Flask server on port {port}...")
+    app.run(host='0.0.0.0', debug=debug_mode, port=port)
