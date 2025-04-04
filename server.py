@@ -8,23 +8,19 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import time
 import shutil
+import logging
 
-app = Flask(__name__, static_folder='.')
+# Initialize Flask app
+app = Flask(__name__, static_folder='static')
 CORS(app)  # Enable CORS for all routes
 
 # Load environment variables
-print("Server loading environment variables...")
-load_dotenv(verbose=True)
+load_dotenv()
 
-# Check for API key at startup
-api_key = os.getenv("MY_GENAI_KEY")
-if not api_key:
-    print("WARNING: MY_GENAI_KEY environment variable not found!")
-    print(f"Available environment variables: {list(os.environ.keys())}")
-else:
-    print(f"API key found with length: {len(api_key)}")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
-# Ensure processed directory exists
+# Ensure 'processed' directory exists
 os.makedirs('processed', exist_ok=True)
 
 @app.route('/')
@@ -47,7 +43,7 @@ def process_image():
         mime_type = image_data.split(';')[0].split(':')[1]
         base64_data = image_data.split(',')[1]
         
-        print(f"Processing image with mime type: {mime_type}")
+        logging.info(f"Processing image with mime type: {mime_type}")
         
         # Create a temporary directory for this request
         temp_dir = tempfile.mkdtemp(prefix=f"watermark_process_{process_id}_")
@@ -66,45 +62,31 @@ def process_image():
         with open(image_path, 'wb') as temp_image:
             temp_image.write(base64.b64decode(base64_data))
         
-        print(f"Saved image to: {image_path}, size: {os.path.getsize(image_path)} bytes")
+        logging.info(f"Saved image to: {image_path}, size: {os.path.getsize(image_path)} bytes")
         
         # Get environment variables to pass to the subprocess
         env = os.environ.copy()
         
-        # Check if API key is available
-        if "MY_GENAI_KEY" not in env:
-            print("WARNING: MY_GENAI_KEY not in environment, trying to set it")
-            api_key = os.getenv("MY_GENAI_KEY")
-            if api_key:
-                env["MY_GENAI_KEY"] = api_key
-                print("Set MY_GENAI_KEY in subprocess environment")
-            else:
-                print("Failed to get MY_GENAI_KEY from os.getenv")
-        
         # Run Python script with the image path as input
-        print(f"Starting py_watermark.py subprocess...")
-        process = subprocess.Popen(
+        logging.info("Starting py_watermark.py subprocess...")
+        result = subprocess.run(
             ['python', 'py_watermark.py'],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            input=image_path,
             text=True,
+            capture_output=True,
             env=env
         )
         
-        # Send the image path to the script's input
-        stdout, stderr = process.communicate(input=image_path)
+        # Log output for debugging
+        logging.info(f"Script stdout: {result.stdout}")
+        if result.stderr:
+            logging.error(f"Script stderr: {result.stderr}")
         
-        # Print output for debugging
-        print(f"Script stdout: {stdout}")
-        if stderr:
-            print(f"Script stderr: {stderr}")
-        
-        if process.returncode != 0:
+        if result.returncode != 0:
             return jsonify({'error': 'Error processing image'}), 500
         
-        output_path = stdout.strip()
-        print(f"Watermark removed, output saved to: {output_path}")
+        output_path = result.stdout.strip()
+        logging.info(f"Watermark removed, output saved to: {output_path}")
         
         # Return the processed image path as response
         with open(output_path, 'rb') as output_image:
@@ -112,7 +94,7 @@ def process_image():
             return jsonify({'success': True, 'imageData': f"data:image/{ext[1:]};base64,{base64_output}"})
     
     except Exception as e:
-        traceback.print_exc()
+        logging.error("An error occurred", exc_info=True)
         return jsonify({'error': str(e)}), 500
     
     finally:
@@ -123,4 +105,4 @@ def process_image():
             shutil.rmtree(temp_dir)
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run()
