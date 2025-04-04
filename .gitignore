@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.env.local
+processed/
+watermark_removed*
+*.jpg
+*.png
+*.webp
+*.gif
+.DS_Store

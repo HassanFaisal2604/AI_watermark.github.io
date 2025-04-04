@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Watermark Removal</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>AI Watermark Removal Tool</h1>
+
+        <div class="upload-container">
+            <input type="file" id="imageInput" accept="image/*">
+            <label for="imageInput" class="upload-btn">Choose an image</label>
+        </div>
+
+        <div class="images-container">
+            <div class="image-box">
+                <h3>Original Image</h3>
+                <img id="originalImage" alt="Original image will appear here">
+            </div>
+
+            <div class="image-box">
+                <h3>Processed Image</h3>
+                <img id="processedImage" alt="Processed image will appear here">
+                <a id="downloadLink" class="download-btn" style="display: none;">Download Image</a>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Processing image...</p>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
