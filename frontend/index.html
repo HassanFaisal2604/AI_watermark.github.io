@@ -194,7 +194,7 @@
             width: 100%;
             max-height: 400px;
             object-fit: contain;
-            border-radius: var(--border-radius);
+            border-radius: var (--border-radius);
             margin-bottom: 1rem;
         }
         
@@ -431,7 +431,9 @@
             document.getElementById('processTab').classList.add('active');
 
             // Send the image to our local server for processing
-            fetch('http://localhost:5000/process', {
+            const BACKEND_URL = 'https://watermarkremove.tech';
+
+            fetch(`${BACKEND_URL}/process`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -459,7 +461,7 @@
                         }
 
                         // Set up the download link to use our download endpoint
-                        document.getElementById('downloadLink').href = 'http://localhost:5000/download/' + data.outputPath;
+                        document.getElementById('downloadLink').href = `${BACKEND_URL}/download/` + data.outputPath;
                         document.getElementById('downloadLink').download = data.outputPath;
 
                         // Set the original image

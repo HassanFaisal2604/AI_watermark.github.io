@@ -4,9 +4,10 @@
         "src": "server.py",
         "use": "@vercel/python",
         "config": {
-            "runtime": "python3.9",
-            "buildCommand": "bash build.sh"
+            "runtime": "python3.9"
         }
     }],
-    "routes": [{ "src": "/(.*)", "dest": "server.py" }]
+    "routes": [
+        { "src": "/(.*)", "dest": "server.py" }
+    ]
 }

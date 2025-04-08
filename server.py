@@ -237,6 +237,10 @@ def download_file(filename):
         return jsonify({'error': f'File not found: {filename}'}), 404
     return send_from_directory('.', filename, as_attachment=True)
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
 if __name__ == '__main__':
     # Get port from environment variable (for Railway deployment)
     port = int(os.environ.get('PORT', 5000))
