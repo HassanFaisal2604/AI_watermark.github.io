@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, redirect
 import subprocess
 import os
 import base64
@@ -10,7 +10,19 @@ import time
 import shutil
 import glob
 
+# Add this before creating your Flask app
+class ReverseProxied(object):
+    def __init__(self, app):
+        self.app = app
+
+    def __call__(self, environ, start_response):
+        scheme = environ.get('HTTP_X_FORWARDED_PROTO', '')
+        if scheme:
+            environ['wsgi.url_scheme'] = scheme
+        return self.app(environ, start_response)
+
 app = Flask(__name__, static_folder='.')
+app.wsgi_app = ReverseProxied(app.wsgi_app)
 CORS(app)  # Enable CORS for all routes
 
 # Load environment variables
