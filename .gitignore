@@ -11,3 +11,4 @@ watermark_removed*
 *.webp
 *.gif
 .DS_Store
+.vercel

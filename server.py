@@ -8,6 +8,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import time
 import shutil
+import glob
 
 app = Flask(__name__, static_folder='.')
 CORS(app)  # Enable CORS for all routes
@@ -27,6 +28,28 @@ else:
 # Ensure processed directory exists
 os.makedirs('processed', exist_ok=True)
 
+def cleanup_old_files():
+    """Clean up old temporary files and processed images"""
+    try:
+        # Clean up old temporary files
+        for file in glob.glob('watermark_removed.*'):
+            try:
+                os.remove(file)
+                print(f"Cleaned up old file: {file}")
+            except Exception as e:
+                print(f"Error cleaning up {file}: {str(e)}")
+        
+        # Clean up old processed files
+        for file in glob.glob('processed/*'):
+            try:
+                if os.path.isfile(file):
+                    os.remove(file)
+                    print(f"Cleaned up processed file: {file}")
+            except Exception as e:
+                print(f"Error cleaning up {file}: {str(e)}")
+    except Exception as e:
+        print(f"Error in cleanup_old_files: {str(e)}")
+
 @app.route('/')
 def index():
     return send_from_directory('.', 'index.html')
@@ -35,10 +58,17 @@ def index():
 def process_image():
     image_path = None
     output_path = None
+    temp_dir = None
     process_id = str(int(time.time()))
     
     try:
+        # Clean up old files before processing
+        cleanup_old_files()
+        
         # Get image data from POST request
+        if not request.json:
+            return jsonify({'error': 'No JSON data received'}), 400
+            
         image_data = request.json.get('image')
         if not image_data or not image_data.startswith('data:image/'):
             return jsonify({'error': 'Invalid image data'}), 400
@@ -143,6 +173,11 @@ def process_image():
         if file_size == 0:
             return jsonify({'error': 'Output file is empty'}), 500
         
+        # Move the processed file to the processed directory
+        processed_path = os.path.join('processed', f"{process_id}{os.path.splitext(output_path)[1]}")
+        shutil.move(output_path, processed_path)
+        output_path = processed_path
+        
         # Determine correct mime type based on file extension
         mime_type = 'image/jpeg'  # Default
         if output_path.endswith('.png'):
@@ -176,13 +211,12 @@ def process_image():
                 print(f"Removed temporary input file: {image_path}")
             
             # Remove temporary directory if it exists
-            if 'temp_dir' in locals() and os.path.exists(temp_dir):
+            if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 print(f"Removed temporary directory: {temp_dir}")
         except Exception as cleanup_error:
             print(f"Error during cleanup: {str(cleanup_error)}")
 
-# Add a specific endpoint for downloading the file
 @app.route('/download/<path:filename>')
 def download_file(filename):
     # Security: Ensure the filename is sanitized
