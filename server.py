@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, redirect
+from flask import Flask, request, jsonify, send_from_directory
 import subprocess
 import os
 import base64
@@ -128,7 +128,7 @@ def process_image():
             return jsonify({'error': 'Processing script (py_watermark.py) not found'}), 500
         
         # Run Python script with the image path as input
-        print(f"Starting py_watermark.py subprocess...")
+        print("Starting py_watermark.py subprocess...")
         process = subprocess.Popen(
             ['python', 'py_watermark.py'],
             stdin=subprocess.PIPE,
