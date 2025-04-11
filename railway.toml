@@ -1,0 +1,6 @@
+# Railway configuration
+healthcheck = "/health"
+
+[[ports]]
+port = "$PORT"
+protocol = "http"

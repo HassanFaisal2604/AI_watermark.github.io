@@ -126,7 +126,7 @@
         }
         
         .instructions h3 {
-            color: var(--dark-color);
+            color: var (--dark-color);
             margin-bottom: 1rem;
             font-size: 1.25rem;
         }
@@ -431,7 +431,9 @@
             document.getElementById('processTab').classList.add('active');
 
             // Send the image to our local server for processing
-            const BACKEND_URL = 'https://watermarkremove.tech';
+            const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ?
+                `http://${window.location.hostname}:5000` :
+                'https://watermarkremove.tech';
 
             fetch(`${BACKEND_URL}/process`, {
                     method: 'POST',
