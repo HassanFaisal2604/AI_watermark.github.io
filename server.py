@@ -64,7 +64,7 @@ def cleanup_old_files():
 
 @app.route('/')
 def index():
-    return send_from_directory('.', 'index.html')
+    return send_from_directory('frontend', 'index.html')
 
 @app.route('/process', methods=['POST'])
 def process_image():
@@ -241,6 +241,15 @@ def download_file(filename):
 def health_check():
     return jsonify({"status": "healthy"}), 200
 
+@app.route('/<path:path>')
+def static_files(path):
+    # Serve static files from the frontend directory
+    return send_from_directory('frontend', path)
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({'error': 'The requested URL was not found on the server. Please check your spelling and try again.'}), 404
+
 if __name__ == '__main__':
     # Get port from environment variable (for Railway deployment)
     port = int(os.environ.get('PORT', 5000))
@@ -249,4 +258,4 @@ if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_ENV') == 'development'
     
     print(f"Starting Flask server on port {port}...")
-    app.run(host='0.0.0.0', debug=debug_mode, port=port)
+    app.run(host='127.0.0.1', debug=debug_mode, port=port)
