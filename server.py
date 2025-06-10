@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import time
 import shutil
 import glob
+import sys
 
 # Add this before creating your Flask app
 class ReverseProxied(object):
@@ -23,7 +24,23 @@ class ReverseProxied(object):
 
 app = Flask(__name__, static_folder='.')
 app.wsgi_app = ReverseProxied(app.wsgi_app)
-CORS(app)  # Enable CORS for all routes
+
+# Configure CORS to allow all origins in development
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:5000", "http://127.0.0.1:5000", "http://192.168.2.105:5000"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type"]
+    }
+})
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
+    return response
 
 # Load environment variables
 print("Server loading environment variables...")
@@ -74,20 +91,33 @@ def process_image():
     process_id = str(int(time.time()))
     
     try:
+        print("\n=== Starting new image processing request ===")
+        print(f"Request headers: {dict(request.headers)}")
+        print(f"Request content type: {request.content_type}")
+        print(f"Request data size: {len(request.get_data()) if request.get_data() else 0} bytes")
+        
         # Clean up old files before processing
         cleanup_old_files()
         
         # Get image data from POST request
         if not request.json:
+            print("Error: No JSON data received in request")
             return jsonify({'error': 'No JSON data received'}), 400
             
         image_data = request.json.get('image')
         if not image_data or not image_data.startswith('data:image/'):
+            print(f"Error: Invalid image data format. Data starts with: {image_data[:50] if image_data else 'None'}")
             return jsonify({'error': 'Invalid image data'}), 400
         
         # Extract mime type and base64 data
-        mime_type = image_data.split(';')[0].split(':')[1]
-        base64_data = image_data.split(',')[1]
+        try:
+            mime_type = image_data.split(';')[0].split(':')[1]
+            base64_data = image_data.split(',')[1]
+            print(f"Successfully extracted mime type: {mime_type}")
+            print(f"Base64 data length: {len(base64_data)}")
+        except Exception as e:
+            print(f"Error parsing image data: {str(e)}")
+            return jsonify({'error': f'Error parsing image data: {str(e)}'}), 400
         
         print(f"Processing image with mime type: {mime_type}")
         
@@ -128,9 +158,13 @@ def process_image():
             return jsonify({'error': 'Processing script (py_watermark.py) not found'}), 500
         
         # Run Python script with the image path as input
-        print("Starting py_watermark.py subprocess...")
+        print("\nStarting py_watermark.py subprocess...")
+        print(f"Current working directory: {os.getcwd()}")
+        print(f"Python executable: {sys.executable}")
+        print(f"Environment variables: {dict(env)}")
+        
         process = subprocess.Popen(
-            ['python', 'py_watermark.py'],
+            [sys.executable, 'py_watermark.py'],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -139,12 +173,16 @@ def process_image():
         )
         
         # Send the image path to the script's input
+        print(f"Sending image path to script: {image_path}")
         stdout, stderr = process.communicate(input=image_path)
         
-        # Print output for debugging
-        print(f"Script stdout: {stdout}")
+        # Print detailed output for debugging
+        print("\n=== Script Output ===")
+        print(f"Return code: {process.returncode}")
+        print(f"stdout:\n{stdout}")
         if stderr:
-            print(f"Script stderr: {stderr}")
+            print(f"stderr:\n{stderr}")
+        print("=== End Script Output ===\n")
         
         if process.returncode != 0:
             return jsonify({
@@ -212,8 +250,16 @@ def process_image():
     
     except Exception as e:
         error_traceback = traceback.format_exc()
-        print(f"Error: {str(e)}\n{error_traceback}")
-        return jsonify({'error': str(e), 'traceback': error_traceback}), 500
+        print("\n=== Error Details ===")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        print(f"Traceback:\n{error_traceback}")
+        print("=== End Error Details ===\n")
+        return jsonify({
+            'error': str(e),
+            'error_type': type(e).__name__,
+            'traceback': error_traceback
+        }), 500
     
     finally:
         # Clean up temporary files
@@ -251,11 +297,6 @@ def not_found_error(error):
     return jsonify({'error': 'The requested URL was not found on the server. Please check your spelling and try again.'}), 404
 
 if __name__ == '__main__':
-    # Get port from environment variable (for Railway deployment)
-    port = int(os.environ.get('PORT', 5000))
-    
-    # In production, disable debug mode
-    debug_mode = os.environ.get('FLASK_ENV') == 'development'
-    
-    print(f"Starting Flask server on port {port}...")
-    app.run(host='127.0.0.1', debug=debug_mode, port=port)
+    app.debug = True
+    # Run on all interfaces
+    app.run(host='0.0.0.0', port=5000, threaded=True)

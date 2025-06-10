@@ -431,22 +431,41 @@
             document.getElementById('processTab').classList.add('active');
 
             // Send the image to our local server for processing
-            const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ?
-                `http://${window.location.hostname}:5000` :
-                'https://watermarkremove.tech';
+            const BACKEND_URL = (() => {
+                const hostname = window.location.hostname;
+                const protocol = window.location.protocol;
+                if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '192.168.2.105') {
+                    return `${protocol}//${hostname}:5000`;
+                }
+                return 'https://watermarkremove.tech';
+            })();
+
+            console.log('Using backend URL:', BACKEND_URL);
 
             fetch(`${BACKEND_URL}/process`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
+                    mode: 'cors',
+                    credentials: 'omit',
                     body: JSON.stringify({
                         image: imageData
                     })
                 })
                 .then(response => {
+                    console.log('Response status:', response.status);
+                    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
                     if (!response.ok) {
-                        throw new Error(`Server error: ${response.status}`);
+                        return response.text().then(text => {
+                            try {
+                                const data = JSON.parse(text);
+                                throw new Error(data.error || `Server error: ${response.status}`);
+                            } catch (e) {
+                                throw new Error(`Server error: ${response.status} - ${text}`);
+                            }
+                        });
                     }
                     return response.json();
                 })
